@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smriti Demo - Clinician Briefing</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 p-8">
+    <div class="max-w-5xl mx-auto">
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+            <h1 class="text-3xl font-bold text-gray-900 mb-2">Smriti — AI Patient Memory Layer</h1>
+            <p class="text-gray-600 mb-6">Privacy-preserving briefing for Priya Sharma (ABHA: ••••-1234)</p>
+            
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Clinician JWT Token</label>
+                <input type="text" id="token" class="w-full border border-gray-300 rounded-lg p-3 font-mono text-sm" 
+                       value="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJocHJfaWQiOiJIUFItRFItMDAxIiwibmFtZSI6IkRyLiBBcmp1biBNZWh0YSIsInJvbGUiOiJNRCIsInByb3ZpZGVyX2lkIjoic2VudGllbnRfaG1zIiwiaWF0IjoxNzc3NDc5OTU5LCJuYmYiOjE3Nzc0Nzk5NTksImV4cCI6MTc3NzUwODc1OX0.jyOIYAevpi1_Dn_OsE_yXLWsvzQVvz9MDuahc68zqqM">
+            </div>
+            
+            <button onclick="generateBriefing()" 
+                    class="w-full bg-blue-600 text-white font-semibold py-3 px-6 rounded-lg hover:bg-blue-700 transition">
+                Generate Briefing for Priya
+            </button>
+        </div>
+
+        <div id="loading" class="hidden bg-white rounded-lg shadow-lg p-8 text-center">
+            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p class="text-gray-600">Generating briefing...</p>
+        </div>
+
+        <div id="error" class="hidden bg-red-50 border border-red-200 rounded-lg p-6 mb-6">
+            <h3 class="text-red-800 font-semibold mb-2">Error</h3>
+            <pre id="errorText" class="text-red-600 text-sm overflow-auto"></pre>
+        </div>
+
+        <div id="briefing" class="hidden">
+            <!-- Conflicts -->
+            <div id="conflicts" class="hidden bg-yellow-50 border-l-4 border-yellow-400 p-6 mb-6 rounded-lg">
+                <h3 class="text-yellow-800 font-semibold mb-3">⚠️ Unresolved Conflicts</h3>
+                <div id="conflictsList"></div>
+            </div>
+
+            <!-- Summary -->
+            <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+                <h2 class="text-xl font-bold text-gray-900 mb-4">Clinical Summary</h2>
+                <p id="summary" class="text-gray-700 leading-relaxed"></p>
+                <div class="mt-4 text-sm text-gray-500">
+                    <span id="latency"></span> • <span id="timestamp"></span>
+                </div>
+            </div>
+
+            <!-- Top Facts -->
+            <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+                <h2 class="text-xl font-bold text-gray-900 mb-4">Key Clinical Facts</h2>
+                <div id="topFacts" class="space-y-3"></div>
+            </div>
+
+            <!-- Cohort Panel (THE WOW) -->
+            <div id="cohortPanel" class="hidden bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg shadow-lg p-6 mb-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-xl font-bold text-gray-900">Patients Like Priya</h2>
+                    <div class="flex gap-2">
+                        <span class="bg-blue-100 text-blue-800 text-xs font-semibold px-3 py-1 rounded-full">k≥10</span>
+                        <span class="bg-indigo-100 text-indigo-800 text-xs font-semibold px-3 py-1 rounded-full">ε=1.0</span>
+                    </div>
+                </div>
+                <p class="text-sm text-gray-600 mb-4">Privacy-preserving treatment-response analysis • n=<span id="cohortN"></span></p>
+                <div id="cohortBuckets" class="space-y-4"></div>
+                <p class="text-xs text-gray-500 mt-4 italic" id="cohortDisclaimer"></p>
+            </div>
+
+            <!-- Medications -->
+            <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+                <h2 class="text-xl font-bold text-gray-900 mb-4">Current Medications</h2>
+                <div id="medications" class="space-y-2"></div>
+            </div>
+
+            <!-- Exclusions -->
+            <div id="exclusions" class="hidden bg-gray-100 border border-gray-300 rounded-lg p-4">
+                <p class="text-sm text-gray-700">⊘ Withheld by patient consent: <span id="exclusionsList" class="font-semibold"></span></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function generateBriefing() {
+            const token = document.getElementById('token').value.trim();
+            const loading = document.getElementById('loading');
+            const error = document.getElementById('error');
+            const briefing = document.getElementById('briefing');
+
+            // Reset
+            loading.classList.remove('hidden');
+            error.classList.add('hidden');
+            briefing.classList.add('hidden');
+
+            try {
+                const response = await fetch('http://localhost:8000/api/v1/clinician/briefing', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        abha_id: '12-3456-7890-1234',
+                        encounter: {
+                            chief_complaint: 'T2DM follow-up, HbA1c 9.2',
+                            encounter_type: 'routine'
+                        }
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+                }
+
+                const data = await response.json();
+                renderBriefing(data);
+
+            } catch (err) {
+                document.getElementById('errorText').textContent = err.message;
+                error.classList.remove('hidden');
+            } finally {
+                loading.classList.add('hidden');
+            }
+        }
+
+        function renderBriefing(data) {
+            // Summary
+            document.getElementById('summary').textContent = data.summary;
+            document.getElementById('latency').textContent = `Generated in ${(data.latency_ms / 1000).toFixed(1)}s`;
+            document.getElementById('timestamp').textContent = new Date().toLocaleString();
+
+            // Conflicts
+            if (data.conflicts && data.conflicts.length > 0) {
+                const conflictsDiv = document.getElementById('conflicts');
+                const list = document.getElementById('conflictsList');
+                list.innerHTML = data.conflicts.map(c => `
+                    <div class="bg-white rounded p-4 mb-2">
+                        <p class="font-semibold text-yellow-900">${c.conflict_type.replace(/_/g, ' ')}</p>
+                        <div class="grid grid-cols-2 gap-4 mt-2 text-sm">
+                            <div><strong>Source A:</strong> ${JSON.stringify(c.source_a)}</div>
+                            <div><strong>Source B:</strong> ${JSON.stringify(c.source_b)}</div>
+                        </div>
+                    </div>
+                `).join('');
+                conflictsDiv.classList.remove('hidden');
+            }
+
+            // Top Facts
+            const factsDiv = document.getElementById('topFacts');
+            factsDiv.innerHTML = data.top_facts.map(f => `
+                <div class="flex items-start gap-3 p-3 bg-gray-50 rounded">
+                    <div class="flex-1">
+                        <p class="text-gray-900">${f.fact}</p>
+                        <p class="text-xs text-gray-500 mt-1">
+                            ${f.source.provider} • ${new Date(f.source.date).toLocaleDateString()}
+                        </p>
+                    </div>
+                </div>
+            `).join('');
+
+            // Cohort Panel
+            if (data.cohort_panel && data.cohort_panel.n_total > 0) {
+                document.getElementById('cohortN').textContent = data.cohort_panel.n_total;
+                document.getElementById('cohortDisclaimer').textContent = data.cohort_panel.disclaimer;
+                
+                const bucketsDiv = document.getElementById('cohortBuckets');
+                const maxMean = Math.max(...data.cohort_panel.buckets.map(b => Math.abs(b.mean_with_dp)));
+                
+                bucketsDiv.innerHTML = data.cohort_panel.buckets.map(b => {
+                    const width = (Math.abs(b.mean_with_dp) / maxMean) * 100;
+                    const color = b.mean_with_dp < 0 ? 'bg-green-500' : 'bg-red-500';
+                    return `
+                        <div class="bg-white rounded-lg p-4">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="font-semibold text-gray-900">${b.regimen}</span>
+                                <span class="text-sm text-gray-500">n=${b.n}</span>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <div class="flex-1 bg-gray-200 rounded-full h-8 overflow-hidden">
+                                    <div class="${color} h-full flex items-center justify-end pr-2" style="width: ${width}%">
+                                        <span class="text-white text-xs font-bold">${b.mean_with_dp.toFixed(1)}%</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <p class="text-xs text-gray-600 mt-2">${b.outcome_metric}: ${b.mean_with_dp.toFixed(1)} ± ${((b.ci_high - b.ci_low) / 2).toFixed(1)}% at 3mo</p>
+                        </div>
+                    `;
+                }).join('');
+                
+                document.getElementById('cohortPanel').classList.remove('hidden');
+            }
+
+            // Medications
+            const medsDiv = document.getElementById('medications');
+            if (data.medication_timeline && data.medication_timeline.length > 0) {
+                medsDiv.innerHTML = data.medication_timeline.map(m => `
+                    <div class="flex items-center gap-3 text-sm">
+                        <span class="w-2 h-2 bg-blue-500 rounded-full"></span>
+                        <span class="flex-1 font-medium">${m.name}</span>
+                        <span class="text-gray-500">${m.dose || ''}</span>
+                        <span class="text-xs text-gray-400">${m.source}</span>
+                    </div>
+                `).join('');
+            } else {
+                medsDiv.innerHTML = '<p class="text-gray-500 italic">No medications on record</p>';
+            }
+
+            // Exclusions
+            if (data.exclusions && data.exclusions.length > 0) {
+                document.getElementById('exclusionsList').textContent = data.exclusions.join(', ');
+                document.getElementById('exclusions').classList.remove('hidden');
+            }
+
+            document.getElementById('briefing').classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>

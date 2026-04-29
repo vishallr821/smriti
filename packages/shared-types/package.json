@@ -1,0 +1,1 @@
+{"name": "shared-types", "version": "0.1.0", "description": "Shared TypeScript types for Smriti", "main": "index.ts", "types": "index.ts", "scripts": {"build": "tsc"}, "dependencies": {}}

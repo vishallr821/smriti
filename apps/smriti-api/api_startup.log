@@ -1,0 +1,8 @@
+INFO:     Started server process [17044]
+INFO:     Waiting for application startup.
+{"port": 8000, "event": "smriti_api_starting", "timestamp": "2026-04-29T15:47:14.271596Z", "level": "info"}
+INFO:     Application startup complete.
+ERROR:    [Errno 10048] error while attempting to bind on address ('0.0.0.0', 8000): [winerror 10048] only one usage of each socket address (protocol/network address/port) is normally permitted
+INFO:     Waiting for application shutdown.
+{"event": "smriti_api_stopping", "timestamp": "2026-04-29T15:47:14.272545Z", "level": "info"}
+INFO:     Application shutdown complete.

@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  # HL7 FHIR Server (MockHospital)
+  hapi-fhir:
+    image: hapiproject/hapi:latest
+    container_name: smriti-hapi-fhir
+    ports:
+      - "8082:8080"
+    environment:
+      - hapi.fhir.db_driver=org.postgresql.Driver
+      - hapi.fhir.server_address=http://localhost:8082/fhir
+    networks:
+      - smriti-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8082/fhir/metadata"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Mock ABHA Service
+  mock-abha:
+    build:
+      context: ./apps/mock-abha
+      dockerfile: Dockerfile
+    container_name: smriti-mock-abha
+    ports:
+      - "8001:8001"
+    environment:
+      - MOCK_ABHA_SIGNING_KEY=${MOCK_ABHA_SIGNING_KEY}
+    networks:
+      - smriti-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+networks:
+  smriti-network:
+    driver: bridge
