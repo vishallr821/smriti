@@ -15,6 +15,7 @@ from smriti.db.connection import get_pool
 from smriti.dependencies import requires_scope
 from smriti.agents import AuditAgent, ConsentGuard
 from smriti.agents.readers import run_reader_dag, run_reader_query
+from smriti.agents.readers.r1_query_router import QueryRouterAgent
 from smriti.agents.readers.dag import get_demo_cache_hit
 from smriti.schemas.encounter import EncounterContext
 
@@ -37,6 +38,53 @@ class BriefingRequest(BaseModel):
 class QueryRequest(BaseModel):
     abha_id: str
     query: str = Field(min_length=1)
+
+
+def _extract_evidence_ids(items: list[dict], limit: int = 5) -> list[str]:
+    out: list[str] = []
+    for item in items:
+        value = item.get("id")
+        if value is None:
+            continue
+        out.append(str(value))
+        if len(out) >= limit:
+            break
+    return out
+
+
+def _condition_lookup_answer(query: str, context: dict) -> dict:
+    q = query.lower()
+    conds = context.get("conditions", []) or []
+    facts = context.get("top_facts", []) or []
+
+    if "hypertension" in q or "htn" in q or "high blood pressure" in q:
+        matches = [
+            c for c in conds
+            if "hypertension" in str(c.get("display_name", "")).lower()
+            or str(c.get("snomed_code", "")).strip() == "38341003"
+            or str(c.get("icd10_code", "")).strip().upper().startswith("I10")
+        ]
+        answer = "yes" if matches else "no"
+        evidence = _extract_evidence_ids(matches if matches else conds)
+        return {
+            "direct_answer": answer,
+            "question_type": "condition_lookup",
+            "subject": "hypertension",
+            "confidence": 0.9 if matches else 0.6,
+            "evidence_ids": evidence,
+            "rationale": "Detected from structured condition records." if matches else "No hypertension condition match found in current retrieval scope.",
+            "supporting_facts": facts[:3],
+        }
+
+    return {
+        "direct_answer": "unknown",
+        "question_type": "general",
+        "subject": None,
+        "confidence": 0.5,
+        "evidence_ids": _extract_evidence_ids(conds),
+        "rationale": "No strict question template matched; returning retrieval context.",
+        "supporting_facts": facts[:3],
+    }
 
 
 def _as_http_error(exc: Exception) -> HTTPException:
@@ -86,10 +134,29 @@ async def clinician_query(
 ):
     request.state.abha_id = payload.abha_id
     try:
+        plan = await QueryRouterAgent().run(
+            EncounterContext(chief_complaint=None, nl_query=payload.query, encounter_type="routine")
+        )
         context = await run_reader_query(payload.abha_id, payload.query, clinician)
     except Exception as exc:
         raise _as_http_error(exc) from exc
-    return jsonable_encoder(context)
+    context_json = context.model_dump(mode="json")
+    answer = _condition_lookup_answer(payload.query, context_json)
+    return jsonable_encoder(
+        {
+            "intent": plan.intent,
+            "parameters": plan.parameters,
+            "query": payload.query,
+            "direct_answer": answer["direct_answer"],
+            "question_type": answer["question_type"],
+            "subject": answer["subject"],
+            "confidence": answer["confidence"],
+            "evidence_ids": answer["evidence_ids"],
+            "rationale": answer["rationale"],
+            "supporting_facts": answer["supporting_facts"],
+            "context": context_json,
+        }
+    )
 
 
 @router.get("/clinician/source/{table}/{id}")

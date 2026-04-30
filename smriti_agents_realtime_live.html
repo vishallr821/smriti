@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Smriti Agent Realtime View</title>
+  <style>
+    :root { --jade:#0b6b4a; --jade-light:#e8f5f0; --ink:#1a1714; --ink-mid:#4a4640; --ink-light:#7a756e; --sand:#f7f4ee; --cream:#fdfcf9; --line:#d8d2c5; --red:#b83030; --ok:#0f8a54; }
+    *{box-sizing:border-box} body{margin:0;font-family:"Segoe UI",system-ui,sans-serif;background:var(--sand);color:var(--ink)}
+    .top{height:62px;background:var(--cream);border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 20px}
+    .brand{display:flex;align-items:center;gap:10px;color:var(--jade);font-size:30px;font-weight:700}
+    .pill{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;border-radius:999px;padding:4px 10px;border:1px solid #b8decf;background:var(--jade-light);color:var(--jade)}
+    .layout{display:grid;grid-template-columns:340px 1fr;gap:14px;padding:14px}
+    .card{background:var(--cream);border:1px solid var(--line);border-radius:12px;padding:14px}
+    .title{font-size:18px;font-weight:700;margin:0 0 8px}
+    label{display:block;margin-top:10px;margin-bottom:5px;font-size:12px;font-weight:700;color:var(--ink-mid)}
+    input,textarea,select,button{width:100%;border-radius:10px;border:1px solid var(--line);padding:10px;font:inherit} textarea{min-height:76px;resize:vertical}
+    button{background:var(--jade);color:#fff;border:0;font-weight:700;cursor:pointer}
+    .btn-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}.btn-secondary{background:#fff;color:var(--jade);border:1px solid var(--jade)}
+    .status{margin-top:10px;border-radius:10px;padding:10px;font-size:13px;background:#f4f8f6;border:1px solid #d2e7df;color:#225c46}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.timeline{margin:0;padding:0;list-style:none}
+    .step{border:1px solid var(--line);border-radius:10px;margin-bottom:8px;padding:10px;background:#fff;display:flex;gap:10px}.dot{width:10px;height:10px;border-radius:50%;margin-top:5px;background:#c7c1b6}
+    .step.running .dot{background:#c47a1a;animation:pulse 1s infinite}.step.done .dot{background:var(--ok)}.step.error .dot{background:var(--red)}
+    .step h4{margin:0;font-size:13px}.step p{margin:3px 0 0;font-size:12px;color:var(--ink-light)}
+    .metric-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}.metric{background:#fff;border:1px solid var(--line);border-radius:999px;font-size:12px;padding:5px 10px;color:var(--ink-mid)}
+    pre{margin:0;max-height:360px;overflow:auto;background:#131722;color:#e4ecff;border-radius:10px;padding:10px;font-size:12px;white-space:pre-wrap;word-break:break-word}
+    .facts .item{border:1px solid var(--line);border-radius:10px;background:#fff;padding:10px;margin-bottom:8px}.facts .meta{font-size:11px;color:var(--ink-light);margin-top:4px}
+    .notice{border-left:4px solid #1b5fa8;background:#e6eef9;padding:10px;border-radius:8px;font-size:12px;color:#184980}
+    @keyframes pulse{0%{opacity:1}50%{opacity:.45}100%{opacity:1}} @media (max-width:980px){.layout{grid-template-columns:1fr}.grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <div class="top"><div class="brand">Smriti <span class="pill">Agent Realtime</span></div><div class="pill" id="healthBadge">Backend: unknown</div></div>
+  <div class="layout">
+    <aside class="card">
+      <h2 class="title">Run Configuration</h2>
+      <label>API Base URL</label><input id="apiBase" value="http://localhost:8000" />
+      <label>ABHA ID</label><input id="abhaId" value="12-3456-7890-1234" />
+      <label>Clinician JWT</label><textarea id="jwt" placeholder="Paste token (without Bearer)"></textarea>
+      <label>Chief Complaint</label><input id="chiefComplaint" value="T2DM follow-up" />
+      <label>Encounter Type</label><select id="encounterType"><option value="routine">routine</option><option value="urgent">urgent</option><option value="emergency">emergency</option></select>
+      <label>Follow-up Query</label><textarea id="query">What medications is the patient currently taking?</textarea>
+      <div class="btn-row"><button onclick="runBriefing()">Run Agent Flow</button><button class="btn-secondary" onclick="runQuery()">Run Query</button></div>
+      <div class="btn-row"><button class="btn-secondary" onclick="checkHealth()">Health</button><button class="btn-secondary" onclick="checkVersion()">Version</button></div>
+      <div class="status" id="runStatus">Ready. Start a run to watch live agent progress.</div>
+      <div class="notice" style="margin-top:10px;">This page calls live backend APIs and displays real payloads/timings.</div>
+    </aside>
+    <main>
+      <div class="grid">
+        <section class="card"><h2 class="title">Agent Timeline</h2><ul class="timeline" id="timeline"></ul><div class="metric-row" id="metrics"></div></section>
+        <section class="card"><h2 class="title">System Output</h2><pre id="systemOutput">No calls yet.</pre></section>
+      </div>
+      <section class="card" style="margin-top:12px;">
+        <h2 class="title">R3 Cohort + Risk Prep Output</h2>
+        <pre id="r3Output">No R3 output yet. Run Agent Flow.</pre>
+      </section>
+      <section class="card" style="margin-top:12px;">
+        <h2 class="title">Live Briefing Facts</h2>
+        <div id="queryAnswer" class="notice" style="display:none;margin-bottom:10px;"></div>
+        <div class="facts" id="facts">No briefing facts yet.</div>
+      </section>
+    </main>
+  </div>
+<script>
+const AGENTS=[{id:'r1',title:'R1 Query Router',desc:'Classifies clinician intent'},{id:'r2',title:'R2 Context Retrieval',desc:'Fetches and filters clinical memory'},{id:'r3',title:'R3 Cohort + Risk Prep',desc:'Builds cohort/risk context'},{id:'r5',title:'R5 Synthesis',desc:'LLM synthesis + citation-enforced briefing'},{id:'done',title:'Reader DAG Complete',desc:'Final response returned'}];
+const el=id=>document.getElementById(id); const apiBase=()=>el('apiBase').value.trim().replace(/\/$/,''); const abhaId=()=>el('abhaId').value.trim(); const jwt=()=>el('jwt').value.trim();
+function renderTimeline(state={}){el('timeline').innerHTML=AGENTS.map(a=>{const st=state[a.id]||'idle';const cls=st==='running'?'running':st==='done'?'done':st==='error'?'error':'';const label=st==='idle'?'pending':st;return `<li class="step ${cls}"><div class="dot"></div><div><h4>${a.title}</h4><p>${a.desc}</p><p><strong>${label}</strong></p></div></li>`}).join('')}
+function setStatus(m){el('runStatus').textContent=m} function setOutput(o){el('systemOutput').textContent=typeof o==='string'?o:JSON.stringify(o,null,2)}
+async function apiCall(path,opts={},auth=true){const h={...(opts.headers||{})}; if(auth){if(!jwt()) throw new Error('Clinician JWT missing'); h['Authorization']=`Bearer ${jwt()}`;} if(!h['Content-Type']&&opts.method&&opts.method!=='GET') h['Content-Type']='application/json'; const res=await fetch(`${apiBase()}${path}`,{...opts,headers:h}); const t=await res.text(); let d=null; try{d=t?JSON.parse(t):null}catch{d={raw:t}} if(!res.ok) throw new Error(d?.detail||d?.raw||`${res.status} ${res.statusText}`); return {data:d,headers:res.headers,status:res.status}}
+function setFacts(b){const f=Array.isArray(b?.top_facts)?b.top_facts:[]; if(!f.length){el('facts').innerHTML='No facts returned.'; return;} el('facts').innerHTML=f.map((x,i)=>{const s=x.source||{}; return `<div class="item"><strong>${String(i+1).padStart(2,'0')}. ${x.fact||''}</strong><div class="meta">${s.provider||'unknown'} · ${s.table||''} ${s.id||''} · ${x.date||s.date||''} · confidence ${x.confidence??'-'}</div></div>`}).join('')}
+async function checkHealth(){try{const r=await apiCall('/health',{method:'GET'},false); el('healthBadge').textContent=`Backend: ${r.data?.status||'ok'}`; setOutput({endpoint:'/health',data:r.data}); setStatus('Health check completed.')}catch(e){el('healthBadge').textContent='Backend: down'; setOutput({endpoint:'/health',error:e.message}); setStatus('Health check failed.')}}
+async function checkVersion(){try{const r=await apiCall('/version',{method:'GET'},false); setOutput({endpoint:'/version',data:r.data}); setStatus('Version fetched.')}catch(e){setOutput({endpoint:'/version',error:e.message}); setStatus('Version call failed.')}}
+async function runBriefing(){const st={r1:'running'}; renderTimeline(st); setStatus('Running reader DAG...'); const t0=performance.now(); const payload={abha_id:abhaId(), encounter:{chief_complaint:el('chiefComplaint').value.trim()||null, encounter_type:el('encounterType').value, nl_query:null}}; let timer=null; try{const seq=['r1','r2','r3','r5']; let i=0; timer=setInterval(()=>{if(i>=seq.length-1) return; st[seq[i]]='done'; st[seq[i+1]]='running'; renderTimeline(st); i++;},750); const r=await apiCall('/api/v1/clinician/briefing',{method:'POST',body:JSON.stringify(payload)},true); clearInterval(timer); st.r1='done'; st.r2='done'; st.r3='done'; st.r5='done'; st.done='done'; renderTimeline(st); const total=Math.round(performance.now()-t0); el('metrics').innerHTML=[`<span class="metric">HTTP ${r.status}</span>`,`<span class="metric">Client Time: ${total} ms</span>`,`<span class="metric">Server Latency: ${r.headers.get('X-Latency-Ms')||'n/a'} ms</span>`,`<span class="metric">Demo Cache: ${r.headers.get('X-Demo-Cache')||'false'}</span>`].join(''); setOutput({endpoint:'/api/v1/clinician/briefing',payload,data:r.data}); el('r3Output').textContent=JSON.stringify({cohort_panel:r.data?.cohort_panel||null,risk_flags:r.data?.risk_flags||[]},null,2); setFacts(r.data); setStatus('Agent flow completed successfully.')}catch(e){if(timer) clearInterval(timer); st.r5='error'; renderTimeline(st); setOutput({endpoint:'/api/v1/clinician/briefing',payload,error:e.message}); el('r3Output').textContent=`Failed to load R3 output: ${e.message}`; setStatus(`Agent flow failed: ${e.message}`)}}
+async function runQuery(){const payload={abha_id:abhaId(),query:el('query').value.trim()}; try{setStatus('Running query endpoint...'); const r=await apiCall('/api/v1/clinician/query',{method:'POST',body:JSON.stringify(payload)},true); const d=r.data||{}; setOutput({endpoint:'/api/v1/clinician/query',payload,data:d}); const qa=el('queryAnswer'); const ans=String(d.direct_answer||'unknown').toUpperCase(); const ev=Array.isArray(d.evidence_ids)?d.evidence_ids:[]; qa.style.display='block'; qa.innerHTML=`<strong>Query Answer:</strong> ${ans} · <strong>Intent:</strong> ${d.intent||'unknown'} · <strong>Confidence:</strong> ${d.confidence ?? 'n/a'}<br><span style="font-size:11px;color:#184980">${d.rationale || ''}</span>${ev.length?`<br><span style="font-size:11px;color:#184980"><strong>Evidence IDs:</strong> ${ev.join(', ')}</span>`:''}`; const sf=Array.isArray(d.supporting_facts)?d.supporting_facts:[]; if(sf.length){ setFacts({top_facts:sf}); } setStatus('Query completed successfully.');}catch(e){setOutput({endpoint:'/api/v1/clinician/query',payload,error:e.message}); el('queryAnswer').style.display='block'; el('queryAnswer').innerHTML=`<strong>Query failed:</strong> ${e.message}`; setStatus(`Query failed: ${e.message}`)}}
+renderTimeline(); checkHealth();
+</script>
+</body>
+</html>

@@ -185,12 +185,24 @@ async def provider_ingest(
         received_at=datetime.now(UTC),
     )
 
-    result = await run_writer_dag(
-        source_record=source_record,
-        abha_id=abha_id,
-        actor_id=provider.provider_id,
-        actor_role="provider",
-    )
+    try:
+        result = await run_writer_dag(
+            source_record=source_record,
+            abha_id=abha_id,
+            actor_id=provider.provider_id,
+            actor_role="provider",
+        )
+    except Exception as exc:  # pragma: no cover - demo guard
+        logger.exception(
+            "provider_ingest_failed",
+            provider_id=provider.provider_id,
+            abha_id=abha_id,
+            error=str(exc),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"writer_ingest_failed: {exc}",
+        ) from exc
 
     ingest_status = _writer_result_to_status(result)
     counts = {
@@ -201,13 +213,24 @@ async def provider_ingest(
     }
     errors: list[str] = []
 
-    ingest_id = await _log_ingest(
-        provider_id=provider.provider_id,
-        abha_id=abha_id,
-        ingest_status=ingest_status,
-        counts=counts,
-        errors=errors,
-    )
+    try:
+        ingest_id = await _log_ingest(
+            provider_id=provider.provider_id,
+            abha_id=abha_id,
+            ingest_status=ingest_status,
+            counts=counts,
+            errors=errors,
+        )
+    except Exception as exc:  # pragma: no cover - demo guard
+        logger.exception(
+            "provider_ingest_log_failed",
+            provider_id=provider.provider_id,
+            abha_id=abha_id,
+            error=str(exc),
+        )
+        # Keep endpoint usable for demo even when ingest_log table is unavailable.
+        ingest_id = f"unlogged-{int(datetime.now(UTC).timestamp())}"
+        errors.append(f"ingest_log_unavailable: {exc}")
 
     logger.info(
         "provider_ingest",

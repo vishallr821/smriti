@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import time
 from datetime import UTC, datetime
 from typing import Any, TypedDict
@@ -116,7 +117,8 @@ async def _persist(state: WriterState) -> WriterState:
     inserted = 0
     merged = len(state["reconciled"].merges)
     conflicts = len(state["reconciled"].conflicts)
-    embeddings_model = _get_embedder()
+    embeddings_model: SentenceTransformer | None = None
+    enable_chunk_indexing = _chunk_indexing_enabled()
     async with pool.acquire() as conn:
         async with conn.transaction():
             for conflict in state["reconciled"].conflicts:
@@ -176,26 +178,32 @@ async def _persist(state: WriterState) -> WriterState:
                 if row_id is None:
                     continue
                 inserted += 1
-                vec_raw = embeddings_model.encode([entity.raw_value], show_progress_bar=False)[0]
-                vec = vec_raw.tolist() if hasattr(vec_raw, "tolist") else list(vec_raw)
-                source_table = {
-                    "condition": "conditions",
-                    "medication": "medications",
-                    "observation": "observations",
-                    "allergy": "allergies",
-                }[entity.entity_type]
-                await conn.execute(
-                    """
-                    INSERT INTO record_chunks (abha_id, source_table, source_id, chunk_text, chunk_vector, created_at)
-                    VALUES ($1,$2,$3,$4,$5::vector,$6)
-                    """,
-                    state["abha_id"],
-                    source_table,
-                    row_id,
-                    entity.raw_value,
-                    _vec_literal(vec),
-                    datetime.now(UTC),
-                )
+                if enable_chunk_indexing:
+                    try:
+                        if embeddings_model is None:
+                            embeddings_model = _get_embedder()
+                        vec_raw = embeddings_model.encode([entity.raw_value], show_progress_bar=False)[0]
+                        vec = vec_raw.tolist() if hasattr(vec_raw, "tolist") else list(vec_raw)
+                        source_table = {
+                            "condition": "conditions",
+                            "medication": "medications",
+                            "observation": "observations",
+                            "allergy": "allergies",
+                        }[entity.entity_type]
+                        await conn.execute(
+                            """
+                            INSERT INTO record_chunks (abha_id, source_table, source_id, chunk_text, chunk_vector, created_at)
+                            VALUES ($1,$2,$3,$4,$5::vector,$6)
+                            """,
+                            state["abha_id"],
+                            source_table,
+                            row_id,
+                            entity.raw_value,
+                            _vec_literal(vec),
+                            datetime.now(UTC),
+                        )
+                    except Exception as exc:  # pragma: no cover - demo guard
+                        logger.warning("chunk_indexing_skipped", abha_id=state["abha_id"], error=str(exc))
 
     await AuditAgent().log(
         actor_id=state["actor_id"],
@@ -240,6 +248,11 @@ def _build_graph():
 
 
 _compiled = _build_graph()
+
+
+def _chunk_indexing_enabled() -> bool:
+    # Demo-safe default is OFF to avoid local native/runtime crashes while encoding embeddings.
+    return os.getenv("SMRITI_ENABLE_CHUNK_INDEXING", "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 async def run_writer_dag(source_record: SourceRecord, abha_id: str, actor_id: str | None = None, actor_role: str = "provider") -> WriterResult:

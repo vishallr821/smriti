@@ -24,7 +24,7 @@ ROLE_TO_MODELS = {
 MODEL_NAME_MAP = {
     "groq_70b": "llama-3.3-70b-versatile",
     "groq_8b": "llama-3.1-8b-instant",
-    "ollama": "llama3.2",
+    "ollama": "llama3.2:3b",
 }
 
 logger = structlog.get_logger("llm_router")

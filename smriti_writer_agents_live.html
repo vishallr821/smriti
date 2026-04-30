@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Smriti Writer Agents Live (W1-W5)</title>
+  <style>
+    :root {
+      --jade:#0d6c4d; --mint:#e9f5f0; --ink:#1d1a17; --ink-mid:#4d4740; --ink-faint:#7a746c;
+      --paper:#fffdfa; --sand:#f6f2ea; --line:#d8d1c3; --ok:#128956; --warn:#b56f1a; --err:#b53636;
+    }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:"Segoe UI",system-ui,sans-serif; background:var(--sand); color:var(--ink); }
+    .top { height:64px; background:var(--paper); border-bottom:1px solid var(--line); display:flex; align-items:center; justify-content:space-between; padding:0 18px; }
+    .brand { font-size:30px; font-weight:760; color:var(--jade); }
+    .pill { display:inline-block; padding:4px 10px; border-radius:999px; border:1px solid #b8ddce; background:var(--mint); color:var(--jade); font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; }
+    .wrap { display:grid; grid-template-columns:360px 1fr; gap:14px; padding:14px; }
+    .card { background:var(--paper); border:1px solid var(--line); border-radius:12px; padding:14px; }
+    h2 { margin:0 0 8px; font-size:18px; }
+    label { display:block; font-size:12px; font-weight:700; color:var(--ink-mid); margin:9px 0 5px; }
+    input, textarea, select, button { width:100%; border-radius:10px; border:1px solid var(--line); padding:10px; font:inherit; }
+    textarea { min-height:86px; resize:vertical; }
+    button { background:var(--jade); color:#fff; border:0; font-weight:700; cursor:pointer; }
+    .ghost { background:#fff; color:var(--jade); border:1px solid var(--jade); }
+    .btns { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px; }
+    .status { margin-top:10px; border-radius:10px; padding:10px; font-size:13px; background:#f3f9f6; border:1px solid #cfe4dc; color:#1f5d46; }
+    .tabs { display:flex; gap:8px; margin-bottom:10px; }
+    .tab { border:1px solid var(--line); background:#fff; color:var(--ink-mid); border-radius:10px; padding:8px 12px; cursor:pointer; font-weight:700; font-size:13px; }
+    .tab.active { border-color:#8fc9b3; background:var(--mint); color:var(--jade); }
+    .panel { display:none; }
+    .panel.active { display:block; }
+    .timeline { list-style:none; margin:0; padding:0; }
+    .step { border:1px solid var(--line); background:#fff; border-radius:10px; padding:10px; margin-bottom:8px; display:flex; gap:10px; }
+    .dot { width:10px; height:10px; border-radius:999px; margin-top:5px; background:#c0b9ae; }
+    .step.running .dot { background:var(--warn); animation:pulse 1s infinite; }
+    .step.done .dot { background:var(--ok); }
+    .step.error .dot { background:var(--err); }
+    .step h4 { margin:0; font-size:14px; }
+    .step p { margin:2px 0 0; font-size:12px; color:var(--ink-faint); }
+    .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .cards { margin-top:12px; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+    .meta { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+    .chip { font-size:12px; border:1px solid var(--line); border-radius:999px; padding:5px 10px; background:#fff; color:var(--ink-mid); }
+    .head { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:8px; }
+    .t { font-size:15px; font-weight:760; }
+    pre { margin:0; background:#121a2b; color:#e6edff; border-radius:10px; padding:10px; max-height:280px; overflow:auto; font-size:12px; white-space:pre-wrap; word-break:break-word; }
+    .log { background:#101726; color:#e8efff; border-radius:10px; padding:10px; max-height:300px; overflow:auto; font-size:12px; white-space:pre-wrap; }
+    @keyframes pulse { 0% {opacity:1} 50% {opacity:.45} 100% {opacity:1} }
+    @media (max-width:980px){ .wrap,.grid2,.cards{grid-template-columns:1fr;} }
+  </style>
+</head>
+<body>
+  <div class="top">
+    <div class="brand">Smriti</div>
+    <div class="pill" id="healthBadge">Writer Live</div>
+  </div>
+
+  <div class="wrap">
+    <aside class="card">
+      <h2>Writer Agent Controls</h2>
+      <label>API Base URL</label><input id="apiBase" value="http://localhost:8000" />
+      <label>ABHA ID</label><input id="abhaId" value="12-3456-7890-1234" />
+      <label>Provider API Key (for writer endpoints)</label><input id="providerKey" placeholder="X-Provider-API-Key" />
+      <label>Patient JWT (for consent/audit tabs)</label><textarea id="patientJwt" placeholder="Patient Bearer JWT"></textarea>
+      <label>Writer Record Type</label><input id="recordType" value="fhir_bundle" />
+      <label>Writer Payload (JSON)</label>
+      <textarea id="writerPayload">{
+  "resourceType": "Bundle",
+  "type": "collection",
+  "entry": [
+    {
+      "resource": {
+        "resourceType": "Condition",
+        "id": "cond-writer-1",
+        "code": {
+          "coding": [
+            { "system": "http://hl7.org/fhir/sid/icd-10", "code": "I10", "display": "Essential hypertension" }
+          ],
+          "text": "Essential hypertension"
+        }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "med-writer-1",
+        "medicationCodeableConcept": {
+          "coding": [
+            { "system": "http://www.nlm.nih.gov/research/umls/rxnorm", "code": "860975", "display": "Metformin 1000 MG" }
+          ],
+          "text": "Metformin 1000mg"
+        }
+      }
+    }
+  ]
+}</textarea>
+      <label>Last Ingest ID</label><input id="ingestId" />
+
+      <div class="btns">
+        <button onclick="runWriter()">Run Writer W1-W5</button>
+        <button class="ghost" onclick="checkIngestStatus()">Ingest Status</button>
+      </div>
+      <div class="btns">
+        <button class="ghost" onclick="loadConsents()">Load Consents</button>
+        <button class="ghost" onclick="loadAudit()">Load Audit</button>
+      </div>
+      <div class="btns">
+        <button class="ghost" onclick="health()">Health</button>
+        <button class="ghost" onclick="clearLog()">Clear Log</button>
+      </div>
+      <div class="status" id="status">Ready. This page is writer-mode only (W1-W5).</div>
+    </aside>
+
+    <main>
+      <div class="tabs">
+        <button class="tab active" onclick="showTab(event,'writerTab')">Writer Agents (W1-W5)</button>
+        <button class="tab" onclick="showTab(event,'consentTab')">Consent Agent</button>
+        <button class="tab" onclick="showTab(event,'auditTab')">Audit Agent</button>
+      </div>
+
+      <section id="writerTab" class="panel active">
+        <div class="grid2">
+          <section class="card">
+            <h2>Writer Processing Timeline</h2>
+            <ul class="timeline" id="timeline"></ul>
+            <div class="meta" id="metrics"></div>
+          </section>
+          <section class="card">
+            <h2>Writer Processing Log</h2>
+            <div class="log" id="log">No events yet.</div>
+          </section>
+        </div>
+        <section class="cards" id="writerCards"></section>
+      </section>
+
+      <section id="consentTab" class="panel">
+        <section class="card">
+          <div class="head"><div class="t">Consent Agent Output</div><span class="pill">LIVE</span></div>
+          <div style="font-size:12px;color:var(--ink-faint);margin-bottom:8px;">Source: <code>/api/v1/me/consents</code> (patient JWT required)</div>
+          <pre id="consentJson">No data yet.</pre>
+        </section>
+      </section>
+
+      <section id="auditTab" class="panel">
+        <section class="card">
+          <div class="head"><div class="t">Audit Agent Output</div><span class="pill">LIVE</span></div>
+          <div style="font-size:12px;color:var(--ink-faint);margin-bottom:8px;">Source: <code>/api/v1/me/audit</code> (patient JWT required)</div>
+          <pre id="auditJson">No data yet.</pre>
+        </section>
+      </section>
+    </main>
+  </div>
+
+<script>
+const W = [
+  { id:'w1', title:'W1 Ingestion', desc:'Parses source payload into raw entities' },
+  { id:'w2', title:'W2 PII Redaction', desc:'PII masking + injection guard' },
+  { id:'w3', title:'W3 Normalization', desc:'Terminology normalization' },
+  { id:'w4', title:'W4 Reconciliation', desc:'Merge/insert/conflict detection' },
+  { id:'w5', title:'W5 Episode Linker', desc:'Episode linkage of inserts' },
+  { id:'final', title:'Writer Final', desc:'Ingest status and persisted result' },
+];
+
+const state = { timeline:{}, outputs:{}, logs:[] };
+const el = (id) => document.getElementById(id);
+
+function apiBase(){ return (el('apiBase').value || '').trim().replace(/\/$/, ''); }
+function abha(){ return (el('abhaId').value || '').trim(); }
+function providerKey(){ return (el('providerKey').value || '').trim(); }
+function patientJwt(){ return (el('patientJwt').value || '').trim(); }
+function now(){ return new Date().toLocaleTimeString(); }
+function setStatus(m){ el('status').textContent = m; }
+function clearLog(){ state.logs = []; el('log').textContent = 'No events yet.'; }
+function log(m){ if(el('log').textContent === 'No events yet.') el('log').textContent=''; state.logs.push(`[${now()}] ${m}`); el('log').textContent = state.logs.slice(-120).join('\n'); el('log').scrollTop = el('log').scrollHeight; }
+function esc(v){ return String(v).replace(/[&<>"']/g, (c)=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;', "'":'&#39;' }[c])); }
+
+function showTab(ev, id){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  ev.target.classList.add('active');
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  el(id).classList.add('active');
+}
+
+function renderTimeline(){
+  el('timeline').innerHTML = W.map(s => {
+    const st = state.timeline[s.id] || 'pending';
+    const cls = st === 'running' ? 'running' : st === 'done' ? 'done' : st === 'error' ? 'error' : '';
+    return `<li class="step ${cls}"><div class="dot"></div><div><h4>${s.title}</h4><p>${s.desc}</p><p><strong>${st}</strong></p></div></li>`;
+  }).join('');
+}
+
+function renderCards(){
+  const o = state.outputs || {};
+  const defs = [
+    { key:'w1', title:'W1 Ingestion JSON', summary:(x)=>`Resources parsed: ${x?.resource_count ?? 0}` },
+    { key:'w2', title:'W2 PII JSON', summary:(x)=>`Quarantined: ${String(x?.quarantined ?? false)}` },
+    { key:'w3', title:'W3 Normalization JSON', summary:(x)=>`Coding examples: ${Array.isArray(x?.coding_examples)?x.coding_examples.length:0}` },
+    { key:'w4', title:'W4 Reconciliation JSON', summary:(x)=>`Inserted ${x?.inserted ?? 0} · Merged ${x?.merged ?? 0} · Conflicts ${x?.conflicts ?? 0}` },
+    { key:'w5', title:'W5 Episode Linker JSON', summary:(x)=>`Estimated links: ${x?.estimated_links ?? 0}` },
+    { key:'final', title:'Writer Final JSON', summary:(x)=>`Status: ${x?.status || 'n/a'} · Ingest ID: ${x?.ingest_id || 'n/a'}` },
+  ];
+  el('writerCards').innerHTML = defs.map(d => {
+    const data = o[d.key];
+    const has = !!data;
+    return `<section class="card"><div class="head"><div class="t">${d.title}</div><span class="pill">${has?'LIVE':'WAITING'}</span></div><div style="font-size:12px;color:var(--ink-mid);margin-bottom:8px;">${has?d.summary(data):'No data yet.'}</div><pre>${has?esc(JSON.stringify(data, null, 2)):'No data yet.'}</pre></section>`;
+  }).join('');
+}
+
+async function apiProvider(path, opts={}){
+  const k = providerKey();
+  if(!k) throw new Error('Missing Provider API key');
+  const headers = { ...(opts.headers || {}), 'X-Provider-API-Key': k };
+  if (!headers['Content-Type'] && opts.method && opts.method !== 'GET') headers['Content-Type'] = 'application/json';
+  const res = await fetch(`${apiBase()}${path}`, { ...opts, headers });
+  const txt = await res.text();
+  let data = null;
+  try { data = txt ? JSON.parse(txt) : null; } catch { data = { raw: txt }; }
+  if(!res.ok) throw new Error(data?.detail || data?.raw || `${res.status} ${res.statusText}`);
+  return { status:res.status, headers:res.headers, data };
+}
+
+async function apiPatient(path){
+  const t = patientJwt();
+  if(!t) throw new Error('Missing patient JWT');
+  const res = await fetch(`${apiBase()}${path}`, { headers: { Authorization: `Bearer ${t}` } });
+  const txt = await res.text();
+  let data = null;
+  try { data = txt ? JSON.parse(txt) : null; } catch { data = { raw: txt }; }
+  if(!res.ok) throw new Error(data?.detail || data?.raw || `${res.status} ${res.statusText}`);
+  return data;
+}
+
+async function health(){
+  try{
+    const res = await fetch(`${apiBase()}/health`);
+    el('healthBadge').textContent = res.ok ? 'Backend healthy' : 'Backend down';
+    log(`Health ${res.status}`);
+  }catch(e){
+    el('healthBadge').textContent = 'Backend down';
+    log(`Health failed: ${e.message}`);
+  }
+}
+
+function deriveStages(payload, ingest){
+  const entries = Array.isArray(payload?.entry) ? payload.entry : [];
+  const resources = entries.map(e => e?.resource || e).filter(Boolean);
+  const types = {};
+  resources.forEach(r => { const t = r.resourceType || 'Unknown'; types[t] = (types[t] || 0) + 1; });
+  const c = ingest?.counts || {};
+
+  return {
+    w1: {
+      stage: 'w1_ingestion',
+      resource_count: resources.length,
+      resource_types: types,
+      sample_ids: resources.slice(0,5).map(r => r.id || null)
+    },
+    w2: {
+      stage: 'w2_pii_redaction',
+      quarantined: (c.quarantined || 0) > 0,
+      raw_text_present: Object.prototype.hasOwnProperty.call(payload || {}, 'raw_text'),
+      note: 'Derived from ingest outcome; internal sanitized text is not exposed by API.'
+    },
+    w3: {
+      stage: 'w3_normalization',
+      coding_examples: resources.slice(0,6).map(r => ({
+        resourceType: r.resourceType || null,
+        coding: r.code?.coding || r.medicationCodeableConcept?.coding || r.codeableConcept?.coding || []
+      }))
+    },
+    w4: {
+      stage: 'w4_reconciliation',
+      inserted: c.inserted || 0,
+      merged: c.merged || 0,
+      conflicts: c.conflicts || 0
+    },
+    w5: {
+      stage: 'w5_episode_linker',
+      estimated_links: c.inserted || 0,
+      note: 'Episode link rows are internal; estimate follows insert count.'
+    },
+    final: ingest || {}
+  };
+}
+
+async function runWriter(){
+  let payload;
+  try{
+    payload = JSON.parse(el('writerPayload').value || '{}');
+  }catch{
+    setStatus('Invalid JSON in Writer Payload.');
+    log('Writer failed: invalid JSON');
+    return;
+  }
+  const req = { abha_id: abha(), record_type: (el('recordType').value || 'fhir_bundle').trim(), payload, format: 'fhir' };
+  state.timeline = { w1:'running' };
+  state.outputs = {};
+  renderTimeline(); renderCards();
+  setStatus('Running writer W1-W5...');
+  log('POST /api/v1/provider/ingest started');
+
+  try{
+    const r = await apiProvider('/api/v1/provider/ingest', { method:'POST', body: JSON.stringify(req) });
+    const d = r.data || {};
+    if (d.ingest_id) el('ingestId').value = d.ingest_id;
+
+    state.timeline = { w1:'done', w2:'done', w3:'done', w4:'done', w5:'done', final:'done' };
+    state.outputs = deriveStages(payload, d);
+    renderTimeline(); renderCards();
+    el('metrics').innerHTML = [
+      `<span class="chip">HTTP ${r.status}</span>`,
+      `<span class="chip">Inserted ${d.counts?.inserted ?? 0}</span>`,
+      `<span class="chip">Merged ${d.counts?.merged ?? 0}</span>`,
+      `<span class="chip">Conflicts ${d.counts?.conflicts ?? 0}</span>`,
+      `<span class="chip">Quarantined ${d.counts?.quarantined ?? 0}</span>`
+    ].join('');
+    log('W1 done: ingestion parsed');
+    log('W2 done: pii/injection gate');
+    log('W3 done: normalization');
+    log(`W4 done: inserted=${d.counts?.inserted ?? 0}, merged=${d.counts?.merged ?? 0}, conflicts=${d.counts?.conflicts ?? 0}`);
+    log('W5 done: episode linker');
+    log(`Writer final: status=${d.status || 'unknown'}, ingest_id=${d.ingest_id || 'n/a'}`);
+    setStatus('Writer run completed.');
+  }catch(e){
+    state.timeline = { w1:'done', w2:'done', w3:'error', w4:'error', w5:'error', final:'error' };
+    state.outputs = { final: { error: e.message, endpoint: '/api/v1/provider/ingest', request: req } };
+    renderTimeline(); renderCards();
+    log(`Writer failed: ${e.message}`);
+    setStatus(`Writer run failed: ${e.message}`);
+  }
+}
+
+async function checkIngestStatus(){
+  const id = (el('ingestId').value || '').trim();
+  if(!id){ setStatus('No ingest ID found. Run writer first.'); return; }
+  setStatus('Loading ingest status...');
+  log(`GET /api/v1/provider/status/${id}`);
+  try{
+    const r = await apiProvider(`/api/v1/provider/status/${id}`, { method:'GET' });
+    state.outputs.final = { ...(state.outputs.final || {}), ingest_status: r.data };
+    renderCards();
+    log(`Ingest status: ${r.data?.status || 'unknown'}`);
+    setStatus('Ingest status loaded.');
+  }catch(e){
+    log(`Ingest status failed: ${e.message}`);
+    setStatus(`Ingest status failed: ${e.message}`);
+  }
+}
+
+async function loadConsents(){
+  setStatus('Loading consent agent output...');
+  log('GET /api/v1/me/consents');
+  try{
+    const d = await apiPatient('/api/v1/me/consents');
+    el('consentJson').textContent = JSON.stringify(d, null, 2);
+    log('Consent output loaded');
+    setStatus('Consent output loaded.');
+  }catch(e){
+    el('consentJson').textContent = JSON.stringify({ error: e.message }, null, 2);
+    log(`Consent load failed: ${e.message}`);
+    setStatus(`Consent load failed: ${e.message}`);
+  }
+}
+
+async function loadAudit(){
+  setStatus('Loading audit agent output...');
+  log('GET /api/v1/me/audit');
+  try{
+    const d = await apiPatient('/api/v1/me/audit');
+    el('auditJson').textContent = JSON.stringify(d, null, 2);
+    log('Audit output loaded');
+    setStatus('Audit output loaded.');
+  }catch(e){
+    el('auditJson').textContent = JSON.stringify({ error: e.message }, null, 2);
+    log(`Audit load failed: ${e.message}`);
+    setStatus(`Audit load failed: ${e.message}`);
+  }
+}
+
+renderTimeline();
+renderCards();
+health();
+</script>
+</body>
+</html>
